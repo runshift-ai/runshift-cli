@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { init } from "./commands/init.js";
+import { remove } from "./commands/remove.js";
 
 const args = process.argv.slice(2);
 const command = args[0] ?? "init";
@@ -8,6 +9,12 @@ const command = args[0] ?? "init";
 switch (command) {
   case "init":
     init(args.slice(1)).catch((err) => {
+      console.error(err.message ?? err);
+      process.exit(1);
+    });
+    break;
+  case "remove":
+    remove().catch((err) => {
       console.error(err.message ?? err);
       process.exit(1);
     });
@@ -23,6 +30,7 @@ switch (command) {
 
   Usage:
     npx runshift init [options]   Read your repo, generate governance rules
+    npx runshift remove           Revert the runshift install commit
 
   Options:
     --version, -v                 Show version

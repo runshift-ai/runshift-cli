@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { execSync } from "node:child_process";
 import type { RepoContext } from "../types.js";
 import { getGitState } from "./git.js";
 
@@ -96,6 +97,45 @@ function getRootConfigs(root: string): string[] {
   }
 }
 
+function getProtectedPaths(root: string, existingRules: Record<string, string>): string[] {
+  const protectedPaths: string[] = [];
+
+  for (const filePath of Object.keys(existingRules)) {
+    // CLAUDE.md is always protected regardless of git history
+    if (filePath === "CLAUDE.md") {
+      protectedPaths.push(filePath);
+      continue;
+    }
+
+    try {
+      const lastCommitMsg = execSync(
+        `git log --follow -1 --pretty=format:"%s" -- "${filePath}"`,
+        { cwd: root, stdio: "pipe" },
+      ).toString().trim();
+
+      if (!lastCommitMsg) {
+        // Not in git → human created → protect
+        protectedPaths.push(filePath);
+        continue;
+      }
+
+      const isRelay =
+        lastCommitMsg.includes("install runshift agent governance rules") ||
+        lastCommitMsg.includes("runshift update");
+
+      if (!isRelay) {
+        // Last commit was by a human → protect
+        protectedPaths.push(filePath);
+      }
+    } catch {
+      // git log failed → protect to be safe
+      protectedPaths.push(filePath);
+    }
+  }
+
+  return protectedPaths;
+}
+
 export function collectRepoContext(root: string): RepoContext {
   // ── package.json ──
   const pkgJson = readJsonSafe(path.join(root, "package.json"));
@@ -163,6 +203,9 @@ export function collectRepoContext(root: string): RepoContext {
     existingRules["CLAUDE.md"] = claudeMd;
   }
 
+  // ── Protected paths ──
+  const protectedPaths = getProtectedPaths(root, existingRules);
+
   // ── Migrations ──
   let migrationCount = 0;
   let migrationNames: string[] = [];
@@ -192,6 +235,7 @@ export function collectRepoContext(root: string): RepoContext {
     migrationCount,
     migrationNames,
     rootConfigs,
+    protectedPaths,
     gitState,
   };
 }

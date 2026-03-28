@@ -63,13 +63,17 @@ export function showScanResults(context: RepoContext): void {
   }
 
   const existingRuleKeys = Object.keys(context.existingRules);
+  const protectedSet = new Set(context.protectedPaths);
   const cursorRules = existingRuleKeys.filter((k) => k.startsWith(".cursor/rules/"));
   if (cursorRules.length > 0) {
-    detections.push(`.cursor/rules/ — ${cursorRules.length} existing file${cursorRules.length === 1 ? "" : "s"} detected`);
+    const protectedCount = cursorRules.filter((k) => protectedSet.has(k)).length;
+    const suffix = protectedCount > 0 ? ` (${protectedCount} protected)` : "";
+    detections.push(`.cursor/rules/ — ${cursorRules.length} existing file${cursorRules.length === 1 ? "" : "s"} detected${suffix}`);
   }
 
   if (existingRuleKeys.includes("CLAUDE.md")) {
-    detections.push("existing CLAUDE.md detected");
+    const claudeProtected = protectedSet.has("CLAUDE.md") ? " (protected — human-written)" : "";
+    detections.push(`existing CLAUDE.md detected${claudeProtected}`);
   }
 
   if (context.tsconfig) {
@@ -121,12 +125,35 @@ export function showFileList(files: GeneratedFile[]): void {
   console.log(dim("\n  + = create, ~ = update existing file\n"));
 }
 
+export function showSelectedFiles(allFiles: GeneratedFile[], selectedPaths: string[]): void {
+  const selected = new Set(selectedPaths);
+  console.log(amber("  relay understood:\n"));
+  for (const file of allFiles) {
+    if (selected.has(file.path)) {
+      console.log(dim("  ✓ ") + file.path + dim(" (included)"));
+    } else {
+      console.log(dim("  ✗ ") + muted(file.path) + dim(" (excluded)"));
+    }
+  }
+  console.log();
+}
+
 export function showWriting(filePath: string): void {
   console.log(dim("  ✓ ") + filePath);
 }
 
 export function showCommit(): void {
   console.log(dim("  ✓ ") + "committed");
+}
+
+export function showProtectedFiles(protectedPaths: string[]): void {
+  if (protectedPaths.length === 0) return;
+  console.log();
+  console.log(amber("  relay preserved your existing files:"));
+  for (const p of protectedPaths) {
+    console.log(dim(`  ~ ${p} — human-written, not overwritten`));
+  }
+  console.log(dim("  run npx runshift update to review suggested changes.\n"));
 }
 
 export function showSummary(summary: string): void {
@@ -159,6 +186,14 @@ export function showDryRunComplete(): void {
   console.log("\n" + divider + "\n");
   console.log(amber("  dry run complete — no files written."));
   console.log(dim("  run npx runshift init to install.\n"));
+  console.log(divider + "\n");
+}
+
+export function showCancelled(): void {
+  console.log();
+  console.log(amber("  no changes made."));
+  console.log(dim("  run npx runshift init when you're ready."));
+  console.log();
   console.log(divider + "\n");
 }
 

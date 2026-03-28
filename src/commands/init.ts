@@ -1,5 +1,5 @@
 import ora from "ora";
-import { execSync } from "node:child_process";
+import { exec, execSync } from "node:child_process";
 import { collectRepoContext, addFileToContext } from "../context/collector.js";
 import { getGitState } from "../context/git.js";
 import {
@@ -11,21 +11,29 @@ import {
   showDataPolicy,
   showFindings,
   showFileList,
+  showSelectedFiles,
+  showProtectedFiles,
   showSummary,
   showSuccess,
   showDryRunComplete,
+  showCancelled,
   showError,
 } from "../ui/display.js";
-import { confirm, promptChoice, promptFilePath } from "../ui/prompt.js";
+import { confirm, promptChoice, promptFilePath, promptFileSelection, promptPreview } from "../ui/prompt.js";
 import { writeFiles, commitFiles } from "../writer.js";
 import type { InitResponse } from "../types.js";
 
-const API_URL =
-  process.env.RUNSHIFT_DEV === "true"
-    ? "http://localhost:3000/api/cli/init"
-    : "https://runshift.ai/api/cli/init";
+const IS_DEV = process.env.RUNSHIFT_DEV === "true";
 
-const TIMEOUT_MS = 240_000;
+const API_URL = IS_DEV
+  ? "http://localhost:3000/api/cli/init"
+  : "https://runshift.ai/api/cli/init";
+
+const BASE_URL = IS_DEV
+  ? "http://localhost:3000"
+  : "https://runshift.ai";
+
+const TIMEOUT_MS = 180_000;
 
 interface InitFlags {
   dryRun: boolean;
@@ -87,6 +95,7 @@ export async function init(args: string[] = []): Promise<void> {
     showDirtyWarning();
     const proceed = await confirm("  continue with uncommitted changes? (y/n) ");
     if (!proceed) {
+      showCancelled();
       process.exit(0);
     }
   }
@@ -109,8 +118,9 @@ export async function init(args: string[] = []): Promise<void> {
   const root = process.cwd();
   const context = collectRepoContext(root);
 
-  // ── 3. Show scan results + data policy + prompt ───────────────────
+  // ── 3. Show scan results + protected files + data policy + prompt ─
   showScanResults(context);
+  showProtectedFiles(context.protectedPaths);
   showDataPolicy();
 
   let choice = await promptChoice("  proceed? [y] add more files? [a] cancel? [n] ");
@@ -129,6 +139,7 @@ export async function init(args: string[] = []): Promise<void> {
   }
 
   if (choice === "n") {
+    showCancelled();
     process.exit(0);
   }
 
@@ -138,7 +149,16 @@ export async function init(args: string[] = []): Promise<void> {
     color: "yellow",
   }).start();
 
-  console.log("calling:", API_URL);
+  const spinnerMessages = [
+    { delay: 8000, text: "relay is analyzing your stack..." },
+    { delay: 20000, text: "generating governance rules..." },
+    { delay: 45000, text: "reviewing with second model..." },
+    { delay: 70000, text: "synthesizing final rules..." },
+  ];
+
+  const spinnerTimeouts = spinnerMessages.map(({ delay, text }) =>
+    setTimeout(() => { spinner.text = text; }, delay),
+  );
 
   let response: Response;
   try {
@@ -153,10 +173,12 @@ export async function init(args: string[] = []): Promise<void> {
     });
 
     clearTimeout(timeout);
+    spinnerTimeouts.forEach((t) => clearTimeout(t));
   } catch (err) {
+    spinnerTimeouts.forEach((t) => clearTimeout(t));
     spinner.stop();
     if (err instanceof Error && err.name === "AbortError") {
-      showError("network", "request timed out after 240s");
+      showError("network", "request timed out after 180s");
     } else {
       showError("network");
     }
@@ -195,37 +217,109 @@ export async function init(args: string[] = []): Promise<void> {
   showFindings(data.findings);
   showFileList(data.files);
 
-  // ── 6. Dry run exit ───────────────────────────────────────────────
+  // ── 6. Preview link ───────────────────────────────────────────────
+  if (data.previewId) {
+    const previewUrl = `${BASE_URL}/preview/${data.previewId}`;
+    const open = await promptPreview(`  preview ready — ${previewUrl}\n\n  [o] open in browser  [enter] continue  `);
+    if (open) {
+      exec(`open ${previewUrl}`);
+    }
+  }
+
+  // ── 7. Dry run exit ───────────────────────────────────────────────
   if (flags.dryRun) {
     showDryRunComplete();
     return;
   }
 
-  // ── 7. Confirm write ──────────────────────────────────────────────
-  const writeConfirm = await confirm("  write these files? (y/n) ");
-  if (!writeConfirm) {
+  // ── 8. File selection ────────────────────────────────────────────
+  const fileChoice = await promptFileSelection("  [a] accept all  [s] select files  [n] don't change anything  ");
+
+  if (fileChoice === "n") {
+    showCancelled();
     process.exit(0);
   }
 
-  // ── 8. Re-check git before writing ────────────────────────────────
-  const gitNow = getGitState();
-  if (gitNow.isDirty && !git.isDirty) {
-    const proceed = await confirm("  working tree changed since scan — continue? (y/n) ");
-    if (!proceed) {
+  let filesToWrite = data.files;
+
+  if (fileChoice === "a") {
+    const preserved = context.protectedPaths.length;
+    if (preserved > 0) {
+      console.log(`\n  relay will write ${data.files.length} files.`);
+      console.log(`  ${preserved} file${preserved === 1 ? " was" : "s were"} preserved (human-written).\n`);
+    } else {
+      console.log(`\n  relay will write all ${data.files.length} files.\n`);
+    }
+    const acceptConfirm = await confirm("  confirm? (y/n) ");
+    if (!acceptConfirm) {
+      showCancelled();
+      process.exit(0);
+    }
+  } else if (fileChoice === "s") {
+    console.log("\n  which files do you want? you can say things like:");
+    console.log("  'all except CLAUDE.md'");
+    console.log("  'only the cursor rules'");
+    console.log("  'just core.mdc and worktrees'\n");
+
+    const instruction = await promptFilePath("  → ");
+
+    const selectUrl = `${BASE_URL}/api/cli/select`;
+    let selectedPaths: string[];
+
+    try {
+      const selectRes = await fetch(selectUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          files: data.files.map((f) => f.path),
+          instruction,
+        }),
+      });
+
+      if (!selectRes.ok) {
+        showError("server", "file selection failed");
+        process.exit(1);
+      }
+
+      const selectData = (await selectRes.json()) as { selectedPaths: string[] };
+      selectedPaths = selectData.selectedPaths;
+    } catch {
+      showError("network");
+      process.exit(1);
+    }
+
+    filesToWrite = data.files.filter((f) => selectedPaths.includes(f.path));
+
+    showSelectedFiles(data.files, selectedPaths);
+    console.log(`  relay will write ${filesToWrite.length} of ${data.files.length} files.\n`);
+
+    const selectConfirm = await confirm("  confirm? (y/n) ");
+    if (!selectConfirm) {
+      showCancelled();
       process.exit(0);
     }
   }
 
-  // ── 9. Write + commit ─────────────────────────────────────────────
+  // ── 9. Re-check git before writing ────────────────────────────────
+  const gitNow = getGitState();
+  if (gitNow.isDirty && !git.isDirty) {
+    const proceed = await confirm("  working tree changed since scan — continue? (y/n) ");
+    if (!proceed) {
+      showCancelled();
+      process.exit(0);
+    }
+  }
+
+  // ── 10. Write + commit ────────────────────────────────────────────
   console.log();
-  writeFiles(root, data.files);
+  writeFiles(root, filesToWrite);
   console.log();
 
-  const committed = commitFiles(root, data.files);
+  const committed = commitFiles(root, filesToWrite);
   if (!committed) {
     console.log("  ⚠ files written but git commit failed\n");
   }
 
-  // ── 10. Success ───────────────────────────────────────────────────
+  // ── 11. Success ───────────────────────────────────────────────────
   showSuccess();
 }

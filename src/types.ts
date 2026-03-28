@@ -17,6 +17,7 @@ export interface RepoContext {
   migrationCount: number;
   migrationNames: string[];
   rootConfigs: string[];
+  protectedPaths: string[];
   gitState: {
     branch: string;
     isDirty: boolean;
@@ -41,4 +42,5 @@ export interface InitResponse {
   files: GeneratedFile[];
   findings: Findings;
   summary: string;
+  previewId?: string;
 }
