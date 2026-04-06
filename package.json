@@ -1,6 +1,6 @@
 {
   "name": "runshift",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "The control plane for agents, wherever they run.",
   "type": "module",
   "main": "dist/index.js",
