@@ -21,7 +21,7 @@ import {
 } from "../ui/display.js";
 import { confirm, promptChoice, promptFilePath, promptFileSelection, promptPreview } from "../ui/prompt.js";
 import { writeFiles, commitFiles } from "../writer.js";
-import type { InitResponse } from "../types.js";
+import type { InitResponse, Findings, GeneratedFile } from "../types.js";
 
 const IS_DEV = process.env.RUNSHIFT_DEV === "true";
 
@@ -149,17 +149,6 @@ export async function init(args: string[] = []): Promise<void> {
     color: "yellow",
   }).start();
 
-  const spinnerMessages = [
-    { delay: 8000, text: "relay is analyzing your stack..." },
-    { delay: 20000, text: "generating governance rules..." },
-    { delay: 45000, text: "reviewing with second model..." },
-    { delay: 70000, text: "synthesizing final rules..." },
-  ];
-
-  const spinnerTimeouts = spinnerMessages.map(({ delay, text }) =>
-    setTimeout(() => { spinner.text = text; }, delay),
-  );
-
   let response: Response;
   try {
     const controller = new AbortController();
@@ -173,9 +162,7 @@ export async function init(args: string[] = []): Promise<void> {
     });
 
     clearTimeout(timeout);
-    spinnerTimeouts.forEach((t) => clearTimeout(t));
   } catch (err) {
-    spinnerTimeouts.forEach((t) => clearTimeout(t));
     spinner.stop();
     if (err instanceof Error && err.name === "AbortError") {
       showError("network", "request timed out after 180s");
@@ -200,14 +187,56 @@ export async function init(args: string[] = []): Promise<void> {
     process.exit(1);
   }
 
-  let data: InitResponse;
-  try {
-    data = (await response.json()) as InitResponse;
-  } catch {
+  // ── Stream reader ─────────────────────────────────────────────────
+  let findings: Findings | undefined;
+  let summary: string | undefined;
+  let files: GeneratedFile[] | undefined;
+  let previewId: string | undefined;
+
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  outer: while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+
+    const lines = buffer.split("\n");
+    buffer = lines.pop()!;
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+
+      let event: { type: string; text?: string; data?: unknown; error?: string; message?: string };
+      try { event = JSON.parse(line); }
+      catch { continue; }
+
+      switch (event.type) {
+        case "status":   spinner.text = event.text!; break;
+        case "findings": findings  = event.data as Findings; break;
+        case "summary":  summary   = event.data as string; break;
+        case "files":    files     = event.data as GeneratedFile[]; break;
+        case "previewId":previewId = event.data as string; break;
+        case "error":
+          spinner.stop();
+          showError(event.error as Parameters<typeof showError>[0], event.message);
+          process.exit(1);
+          break;
+        case "done":
+          break outer;
+      }
+    }
+  }
+
+  if (!findings || !summary || !files) {
     spinner.stop();
-    showError("server", "invalid response from relay");
+    showError("server", "incomplete response from relay");
     process.exit(1);
   }
+
+  const data: InitResponse = { findings, summary, files, previewId };
 
   spinner.stop();
   console.log();
