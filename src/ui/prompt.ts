@@ -9,6 +9,8 @@ function ask(question: string): Promise<string> {
   return new Promise((resolve) => {
     rl.question(question, (answer) => {
       rl.close();
+      if (process.stdin.isTTY) process.stdin.setRawMode(false);
+      process.stdin.pause();
       resolve(answer.trim());
     });
   });

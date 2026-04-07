@@ -1,6 +1,10 @@
 import chalk from "chalk";
 import figlet from "figlet";
+import { createRequire } from "module";
 import type { Findings, GeneratedFile, RepoContext } from "../types.js";
+
+const require = createRequire(import.meta.url);
+const { version } = require("../../package.json") as { version: string };
 
 const amber = chalk.hex("#f5a623");
 const muted = chalk.hex("#6b6b7b");
@@ -13,7 +17,7 @@ export function showBanner(): void {
     horizontalLayout: "default",
   });
   console.log(amber(banner));
-  console.log(muted("  v0.0.3"));
+  console.log(muted(`  v${version}`));
   console.log(muted("  the control plane for agents, wherever they run."));
   console.log(dim("  usage: npx runshift init [--dry-run] [--branch <name>]\n"));
   console.log(divider + "\n");

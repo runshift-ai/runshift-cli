@@ -1,4 +1,5 @@
 import ora from "ora";
+import * as readline from "node:readline";
 import { exec, execSync } from "node:child_process";
 import { collectRepoContext, addFileToContext } from "../context/collector.js";
 import { getGitState } from "../context/git.js";
@@ -147,6 +148,8 @@ export async function init(args: string[] = []): Promise<void> {
   }
 
   // ── 4. Call API ───────────────────────────────────────────────────
+  await new Promise(resolve => setTimeout(resolve, 50));
+
   if (flags.fast) {
     console.log("  running in fast mode — critic pass skipped\n");
   }
@@ -154,7 +157,12 @@ export async function init(args: string[] = []): Promise<void> {
   const spinner = ora({
     text: "relay is reading your repository...",
     color: "yellow",
+    spinner: "dots",
+    interval: 80,
   }).start();
+
+  readline.emitKeypressEvents(process.stdin);
+  if (process.stdin.isTTY) process.stdin.setRawMode(false);
 
   let response: Response;
   try {
@@ -199,6 +207,7 @@ export async function init(args: string[] = []): Promise<void> {
   let summary: string | undefined;
   let files: GeneratedFile[] | undefined;
   let previewId: string | undefined;
+  const statusLines: string[] = [];
 
   const reader = response.body!.getReader();
   const decoder = new TextDecoder();
@@ -221,7 +230,7 @@ export async function init(args: string[] = []): Promise<void> {
       catch { continue; }
 
       switch (event.type) {
-        case "status":   spinner.clear(); spinner.text = event.text!; spinner.render(); break;
+        case "status":   statusLines.push(event.text!); break;
         case "findings": findings  = event.data as Findings; break;
         case "summary":  summary   = event.data as string; break;
         case "files":    files     = event.data as GeneratedFile[]; break;
@@ -246,6 +255,7 @@ export async function init(args: string[] = []): Promise<void> {
   const data: InitResponse = { findings, summary, files, previewId };
 
   spinner.stop();
+  for (const line of statusLines) console.log(`  ${line}`);
   console.log();
 
   // ── 5. Show findings + file list ──────────────────────────────────
