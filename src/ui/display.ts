@@ -179,7 +179,7 @@ export function showDataPolicy(): void {
   console.log(dim("  ✓ existing .cursor/rules/ (if present)"));
   console.log(dim("  ✓ migration file names (no file contents)"));
   console.log(dim("\n  no source code is sent."));
-  console.log(dim("  no secret values are ever read.\n"));
+  console.log(dim("  no secret values are ever read."));
 }
 
 export function showDryRunComplete(): void {

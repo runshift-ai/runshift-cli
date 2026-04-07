@@ -39,10 +39,11 @@ interface InitFlags {
   dryRun: boolean;
   branch: string | null;
   help: boolean;
+  fast: boolean;
 }
 
 function parseFlags(args: string[]): InitFlags {
-  const flags: InitFlags = { dryRun: false, branch: null, help: false };
+  const flags: InitFlags = { dryRun: false, branch: null, help: false, fast: false };
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -54,6 +55,8 @@ function parseFlags(args: string[]): InitFlags {
       if (next && !next.startsWith("--")) i++;
     } else if (arg === "--help") {
       flags.help = true;
+    } else if (arg === "--fast") {
+      flags.fast = true;
     }
   }
 
@@ -144,6 +147,10 @@ export async function init(args: string[] = []): Promise<void> {
   }
 
   // ── 4. Call API ───────────────────────────────────────────────────
+  if (flags.fast) {
+    console.log("  running in fast mode — critic pass skipped\n");
+  }
+
   const spinner = ora({
     text: "relay is reading your repository...",
     color: "yellow",
@@ -157,7 +164,7 @@ export async function init(args: string[] = []): Promise<void> {
     response = await fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(context),
+      body: JSON.stringify({ ...context, fast: flags.fast }),
       signal: controller.signal,
     });
 
@@ -214,7 +221,7 @@ export async function init(args: string[] = []): Promise<void> {
       catch { continue; }
 
       switch (event.type) {
-        case "status":   spinner.text = event.text!; break;
+        case "status":   spinner.clear(); spinner.text = event.text!; spinner.render(); break;
         case "findings": findings  = event.data as Findings; break;
         case "summary":  summary   = event.data as string; break;
         case "files":    files     = event.data as GeneratedFile[]; break;
