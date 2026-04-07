@@ -1,6 +1,6 @@
 {
   "name": "runshift",
-  "version": "0.0.7",
+  "version": "0.0.9",
   "description": "The control plane for agents, wherever they run.",
   "type": "module",
   "main": "dist/index.js",
@@ -21,9 +21,9 @@
   "author": "Devin Crane",
   "license": "MIT",
   "dependencies": {
-    "chalk": "^5.4.1",
-    "figlet": "^1.8.0",
-    "ora": "^8.2.0"
+    "chalk": "5.6.2",
+    "figlet": "1.11.0",
+    "ora": "8.2.0"
   },
   "devDependencies": {
     "@types/figlet": "^1.7.0",

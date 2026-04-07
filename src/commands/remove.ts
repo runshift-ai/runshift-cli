@@ -32,6 +32,12 @@ export async function remove(): Promise<void> {
 
   const spaceIdx = logLine.indexOf(" ");
   const hash = logLine.slice(0, spaceIdx);
+
+  if (!/^[0-9a-f]{40}$/.test(hash)) {
+    console.log(amber("  could not parse commit hash.\n"));
+    return;
+  }
+
   const rest = logLine.slice(spaceIdx + 1);
 
   // Split rest into message and date (date is last 10 chars: YYYY-MM-DD)

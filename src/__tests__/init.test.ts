@@ -436,6 +436,89 @@ describe("init command — stream reader", () => {
     });
   });
 
+  // ── spinner lifecycle ─────────────────────────────────────────────────────
+  // The CLI maintains a single `activeSpinner` reference.  A new ora spinner is
+  // created and started on each `status` event.  It is stopped when the next
+  // event arrives (status, step, or done) and nulled when the stream closes.
+
+  describe("status spinner lifecycle", () => {
+    /** Minimal valid stream that reaches --dry-run exit cleanly. */
+    function makeValidStream(extraEvents: object[] = []): Response {
+      return makeStreamResponse([
+        ...extraEvents,
+        { type: "findings", data: FIXTURE_FINDINGS },
+        { type: "files", data: FIXTURE_FILES },
+        { type: "summary", data: "ok" },
+        { type: "done" },
+      ]);
+    }
+
+    it("ora is called and .start() is invoked when the first status event arrives", async () => {
+      const { default: ora } = await import("ora");
+
+      vi.mocked(fetch).mockResolvedValue(
+        makeValidStream([{ type: "status", text: "working..." }]),
+      );
+
+      await init(["--dry-run"]);
+
+      expect(ora).toHaveBeenCalled();
+      expect(mockSpinner.start).toHaveBeenCalled();
+    });
+
+    it("activeSpinner.stop() is called when a second status event arrives", async () => {
+      vi.mocked(fetch).mockResolvedValue(
+        makeValidStream([
+          { type: "status", text: "first status" },
+          { type: "status", text: "second status" },
+        ]),
+      );
+
+      await init(["--dry-run"]);
+
+      // Two status events → two .start() calls; first spinner stopped before second starts
+      expect(mockSpinner.start).toHaveBeenCalledTimes(2);
+      // stop() called: once before second status, once after done (post-loop cleanup)
+      expect(mockSpinner.stop).toHaveBeenCalledTimes(2);
+    });
+
+    it("activeSpinner.stop() is called after the stream closes (post-loop cleanup)", async () => {
+      vi.mocked(fetch).mockResolvedValue(
+        makeValidStream([{ type: "status", text: "thinking..." }]),
+      );
+
+      await init(["--dry-run"]);
+
+      // status → start(1); done → loop breaks → post-loop stop(1)
+      expect(mockSpinner.stop).toHaveBeenCalledTimes(1);
+    });
+
+    it("step event stops activeSpinner before the label is logged", async () => {
+      const callOrder: string[] = [];
+
+      mockSpinner.stop.mockImplementation(() => {
+        callOrder.push("stop");
+      });
+      const consoleSpy = vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+        const msg = String(args[0]);
+        if (msg.includes("✦")) callOrder.push("label");
+      });
+
+      vi.mocked(fetch).mockResolvedValue(
+        makeValidStream([
+          { type: "status", text: "thinking..." },
+          { type: "step", label: "reading package.json", result: "next 14 found" },
+        ]),
+      );
+
+      await init(["--dry-run"]);
+      consoleSpy.mockRestore();
+
+      // stop() must precede label console.log
+      expect(callOrder.indexOf("stop")).toBeLessThan(callOrder.indexOf("label"));
+    });
+  });
+
   // ── 9. AbortError on 180s timeout handled correctly ───────────────────────
 
   describe("timeout / network failure (test 9)", () => {

@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { execSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 import type { RepoContext } from "../types.js";
 import { getGitState } from "./git.js";
 
@@ -108,10 +108,11 @@ function getProtectedPaths(root: string, existingRules: Record<string, string>):
     }
 
     try {
-      const lastCommitMsg = execSync(
-        `git log --follow -1 --pretty=format:"%s" -- "${filePath}"`,
+      const result = spawnSync(
+        "git", ["log", "--follow", "-1", "--pretty=format:%s", "--", filePath],
         { cwd: root, stdio: "pipe" },
-      ).toString().trim();
+      );
+      const lastCommitMsg = result.stdout.toString().trim();
 
       if (!lastCommitMsg) {
         // Not in git → human created → protect
@@ -150,8 +151,17 @@ export function collectRepoContext(root: string): RepoContext {
       }
     : { dependencies: {}, devDependencies: {}, scripts: {} };
 
-  // ── tsconfig.json ──
-  const tsconfig = readJsonSafe(path.join(root, "tsconfig.json"));
+  // ── tsconfig.json (selected fields only) ──
+  let tsconfig: Record<string, unknown> | null = null;
+  const rawTsconfig = readJsonSafe(path.join(root, "tsconfig.json"));
+  if (rawTsconfig) {
+    const co = rawTsconfig.compilerOptions as Record<string, unknown> | undefined;
+    tsconfig = {
+      compilerOptions: co
+        ? { target: co.target, module: co.module, strict: co.strict, outDir: co.outDir }
+        : {},
+    };
+  }
 
   // ── Directory tree ──
   const directoryTree = getDirectoryTree(root);
@@ -169,14 +179,15 @@ export function collectRepoContext(root: string): RepoContext {
     }
   }
 
-  // ── Config files ──
+  // ── Config files (names only — contents not sent) ──
   const configFiles: Record<string, string> = {};
   for (const pattern of CONFIG_PATTERNS) {
     const fullPath = path.join(root, pattern);
-    const content = readFileSafe(fullPath);
-    if (content) {
-      // Cap config file content at 5000 chars
-      configFiles[pattern] = content.slice(0, 5000);
+    try {
+      fs.accessSync(fullPath);
+      configFiles[pattern] = "";
+    } catch {
+      // file doesn't exist
     }
   }
 
@@ -241,7 +252,13 @@ export function collectRepoContext(root: string): RepoContext {
 }
 
 export function addFileToContext(root: string, filePath: string, context: RepoContext): boolean {
+  const resolvedRoot = path.resolve(root);
   const fullPath = path.resolve(root, filePath);
+
+  if (!fullPath.startsWith(resolvedRoot + path.sep) && fullPath !== resolvedRoot) {
+    return false;
+  }
+
   const content = readFileSafe(fullPath);
   if (!content) return false;
   context.configFiles[filePath] = content.slice(0, 5000);

@@ -1,6 +1,6 @@
 import ora from "ora";
 import chalk from "chalk";
-import { exec, execSync } from "node:child_process";
+import { spawn, execSync } from "node:child_process";
 import { collectRepoContext, addFileToContext } from "../context/collector.js";
 import { getGitState } from "../context/git.js";
 import {
@@ -87,6 +87,10 @@ export async function init(args: string[] = []): Promise<void> {
 
   showBanner();
 
+  if (IS_DEV) {
+    console.log(chalk.yellow("  ⚠ dev mode — pointing at localhost:3000\n"));
+  }
+
   // ── 1. Git safety ─────────────────────────────────────────────────
   const git = getGitState();
 
@@ -108,6 +112,11 @@ export async function init(args: string[] = []): Promise<void> {
 
   // ── 1b. Branch flag — create and switch ───────────────────────────
   if (flags.branch) {
+    if (!/^[a-zA-Z0-9._\-/]+$/.test(flags.branch)) {
+      console.log("  invalid branch name.\n");
+      process.exit(1);
+    }
+
     try {
       execSync(`git rev-parse --verify ${flags.branch}`, { stdio: "pipe" });
       console.log(`  branch ${flags.branch} already exists.\n`);
@@ -251,9 +260,26 @@ export async function init(args: string[] = []): Promise<void> {
 
   if (activeSpinner) { activeSpinner.stop(); activeSpinner = null; }
 
-  if (!findings || !summary || !files) {
+  if (!findings || !summary || !Array.isArray(files)) {
     showError("server", "incomplete response from relay");
     process.exit(1);
+    return;
+  }
+
+  // ── Validate response schema ──────────────────────────────────────
+  for (const f of files) {
+    if (typeof f.path !== "string" || typeof f.content !== "string") {
+      showError("server", "invalid response: file missing path or content");
+      process.exit(1);
+    }
+    if (f.action !== "create" && f.action !== "update") {
+      showError("server", `invalid response: unknown action "${f.action}"`);
+      process.exit(1);
+    }
+    if (f.path.includes("..")) {
+      showError("server", `invalid response: path traversal in "${f.path}"`);
+      process.exit(1);
+    }
   }
 
   const data: InitResponse = { findings, summary, files, previewId };
@@ -270,7 +296,7 @@ export async function init(args: string[] = []): Promise<void> {
     const previewUrl = `${BASE_URL}/preview/${data.previewId}`;
     const open = await promptPreview(`  preview ready — ${previewUrl}\n\n  [o] open in browser  [enter] continue  `);
     if (open) {
-      exec(`open ${previewUrl}`);
+      spawn("open", [previewUrl], { stdio: "ignore", detached: true }).unref();
     }
   }
 

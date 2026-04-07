@@ -181,8 +181,8 @@ export function showDataPolicy(): void {
   console.log(dim("  ✓ package.json (dependencies and scripts only)"));
   console.log(dim("  ✓ directory structure (top 2 levels, folder names only)"));
   console.log(dim("  ✓ .env.example (key names only — values are never read)"));
-  console.log(dim("  ✓ existing CLAUDE.md (if present)"));
-  console.log(dim("  ✓ existing .cursor/rules/ (if present)"));
+  console.log(dim("  ✓ existing CLAUDE.md contents (if present)"));
+  console.log(dim("  ✓ existing .cursor/rules/ contents (if present)"));
   console.log(dim("  ✓ migration file names (no file contents)"));
   console.log(dim("\n  no source code is sent."));
   console.log(dim("  no secret values are ever read."));
