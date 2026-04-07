@@ -1,5 +1,5 @@
 import ora from "ora";
-import * as readline from "node:readline";
+import chalk from "chalk";
 import { exec, execSync } from "node:child_process";
 import { collectRepoContext, addFileToContext } from "../context/collector.js";
 import { getGitState } from "../context/git.js";
@@ -77,6 +77,8 @@ function showInitHelp(): void {
 
 export async function init(args: string[] = []): Promise<void> {
   const flags = parseFlags(args);
+  const amber = chalk.hex("#f5a623");
+  const dim = chalk.dim;
 
   if (flags.help) {
     showInitHelp();
@@ -148,21 +150,11 @@ export async function init(args: string[] = []): Promise<void> {
   }
 
   // ── 4. Call API ───────────────────────────────────────────────────
-  await new Promise(resolve => setTimeout(resolve, 50));
-
   if (flags.fast) {
     console.log("  running in fast mode — critic pass skipped\n");
   }
 
-  const spinner = ora({
-    text: "relay is reading your repository...",
-    color: "yellow",
-    spinner: "dots",
-    interval: 80,
-  }).start();
-
-  readline.emitKeypressEvents(process.stdin);
-  if (process.stdin.isTTY) process.stdin.setRawMode(false);
+  console.log(dim("\n  ─────────────────────────────────────\n"));
 
   let response: Response;
   try {
@@ -178,7 +170,6 @@ export async function init(args: string[] = []): Promise<void> {
 
     clearTimeout(timeout);
   } catch (err) {
-    spinner.stop();
     if (err instanceof Error && err.name === "AbortError") {
       showError("network", "request timed out after 180s");
     } else {
@@ -188,7 +179,6 @@ export async function init(args: string[] = []): Promise<void> {
   }
 
   if (!response.ok) {
-    spinner.stop();
     const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
     const msg = (body.message ?? body.error) as string | undefined;
 
@@ -207,11 +197,12 @@ export async function init(args: string[] = []): Promise<void> {
   let summary: string | undefined;
   let files: GeneratedFile[] | undefined;
   let previewId: string | undefined;
-  const statusLines: string[] = [];
 
   const reader = response.body!.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+
+  let activeSpinner: ReturnType<typeof ora> | null = null;
 
   outer: while (true) {
     const { done, value } = await reader.read();
@@ -225,18 +216,30 @@ export async function init(args: string[] = []): Promise<void> {
     for (const line of lines) {
       if (!line.trim()) continue;
 
-      let event: { type: string; text?: string; data?: unknown; error?: string; message?: string };
+      let event: { type: string; text?: string; data?: unknown; error?: string; message?: string; label?: string; result?: string };
       try { event = JSON.parse(line); }
       catch { continue; }
 
       switch (event.type) {
-        case "status":   statusLines.push(event.text!); break;
+        case "status":
+          if (activeSpinner) activeSpinner.stop();
+          activeSpinner = ora({
+            text: amber(`  ${event.text!}`),
+            spinner: "dots",
+            color: "yellow",
+          }).start();
+          break;
+        case "step":
+          if (activeSpinner) { activeSpinner.stop(); activeSpinner = null; }
+          console.log(amber(`  ✦ ${event.label!}`));
+          console.log(dim(`    → ${event.result!}\n`));
+          break;
         case "findings": findings  = event.data as Findings; break;
         case "summary":  summary   = event.data as string; break;
         case "files":    files     = event.data as GeneratedFile[]; break;
         case "previewId":previewId = event.data as string; break;
         case "error":
-          spinner.stop();
+          if (activeSpinner) { activeSpinner.stop(); activeSpinner = null; }
           showError(event.error as Parameters<typeof showError>[0], event.message);
           process.exit(1);
           break;
@@ -246,17 +249,16 @@ export async function init(args: string[] = []): Promise<void> {
     }
   }
 
+  if (activeSpinner) { activeSpinner.stop(); activeSpinner = null; }
+
   if (!findings || !summary || !files) {
-    spinner.stop();
     showError("server", "incomplete response from relay");
     process.exit(1);
   }
 
   const data: InitResponse = { findings, summary, files, previewId };
 
-  spinner.stop();
-  for (const line of statusLines) console.log(`  ${line}`);
-  console.log();
+  console.log(dim("\n  ─────────────────────────────────────\n"));
 
   // ── 5. Show findings + file list ──────────────────────────────────
   showSummary(data.summary);

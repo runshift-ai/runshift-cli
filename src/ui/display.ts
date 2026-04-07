@@ -111,12 +111,13 @@ export function showFindings(findings: Findings): void {
 
   for (const [title, items] of sections) {
     if (items.length === 0) continue;
-    console.log(amber(`  ${title}`));
+    console.log();
+    console.log(amber(`  ${title.toUpperCase()}`));
     for (const item of items) {
       console.log(dim(`  → ${item}`));
     }
-    console.log();
   }
+  console.log();
 }
 
 export function showFileList(files: GeneratedFile[]): void {
@@ -161,7 +162,8 @@ export function showProtectedFiles(protectedPaths: string[]): void {
 }
 
 export function showSummary(summary: string): void {
-  console.log(muted(`  ${summary.replace(/\n/g, "\n  ")}\n`));
+  console.log(amber("  relay's read:\n"));
+  console.log(dim(`  ${summary.replace(/\n/g, "\n  ")}\n`));
 }
 
 export function showSuccess(): void {
