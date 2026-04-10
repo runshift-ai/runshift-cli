@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { execSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import type { RepoContext } from "../types.js";
 import { getGitState } from "./git.js";
 

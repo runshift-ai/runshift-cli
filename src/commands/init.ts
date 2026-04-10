@@ -1,6 +1,8 @@
+import * as fs from "node:fs";
+import * as path from "node:path";
 import ora from "ora";
 import chalk from "chalk";
-import { spawn, execSync } from "node:child_process";
+import { spawn, execFileSync, spawnSync } from "node:child_process";
 import { collectRepoContext, addFileToContext } from "../context/collector.js";
 import { getGitState } from "../context/git.js";
 import {
@@ -23,6 +25,14 @@ import {
 import { confirm, promptChoice, promptFilePath, promptFileSelection, promptPreview } from "../ui/prompt.js";
 import { writeFiles, commitFiles } from "../writer.js";
 import type { InitResponse, Findings, GeneratedFile } from "../types.js";
+
+function isCIPath(filePath: string): boolean {
+  const segments = filePath.split("/");
+  if (segments[0] === ".github" && segments[1] === "workflows") return true;
+  if (segments[0] === ".circleci") return true;
+  if (segments.length === 1 && (filePath === ".gitlab-ci.yml" || filePath === ".travis.yml")) return true;
+  return false;
+}
 
 const IS_DEV = process.env.RUNSHIFT_DEV === "true";
 
@@ -118,14 +128,14 @@ export async function init(args: string[] = []): Promise<void> {
     }
 
     try {
-      execSync(`git rev-parse --verify ${flags.branch}`, { stdio: "pipe" });
+      execFileSync("git", ["rev-parse", "--verify", flags.branch], { stdio: "pipe" });
       console.log(`  branch ${flags.branch} already exists.\n`);
       process.exit(1);
     } catch {
       // branch doesn't exist — good
     }
 
-    execSync(`git checkout -b ${flags.branch}`, { stdio: "pipe" });
+    execFileSync("git", ["checkout", "-b", flags.branch], { stdio: "pipe" });
     console.log(`  switched to new branch ${flags.branch}\n`);
   }
 
@@ -384,7 +394,25 @@ export async function init(args: string[] = []): Promise<void> {
     }
   }
 
-  // ── 10. Write + commit ────────────────────────────────────────────
+  // ── 10. CI config confirmation ─────────────────────────────────────
+  const ciFiles = filesToWrite.filter((f) => isCIPath(f.path));
+  for (const ci of ciFiles) {
+    console.log();
+    const ok = await confirm(
+      `  This will write a CI configuration file to ${ci.path}. CI files execute on push and pull request events. Review before approving. Continue? [y/n] `,
+    );
+    if (!ok) {
+      filesToWrite = filesToWrite.filter((f) => f.path !== ci.path);
+      console.log(dim(`  skipped ${ci.path}`));
+    }
+  }
+
+  if (filesToWrite.length === 0) {
+    showCancelled();
+    process.exit(0);
+  }
+
+  // ── 11. Write + commit ────────────────────────────────────────────
   console.log();
   writeFiles(root, filesToWrite);
   console.log();
@@ -394,6 +422,39 @@ export async function init(args: string[] = []): Promise<void> {
     console.log("  ⚠ files written but git commit failed\n");
   }
 
-  // ── 11. Success ───────────────────────────────────────────────────
+  // ── 11b. Write manifest ──────────────────────────────────────────
+  if (committed) {
+    try {
+      const commitHash = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, stdio: "pipe" })
+        .toString()
+        .trim();
+
+      const manifest = {
+        commit_hash: commitHash,
+        files_written: filesToWrite.map((f) => f.path),
+        timestamp: new Date().toISOString(),
+        version: "0.0.11",
+      };
+
+      const manifestDir = path.join(root, ".runshift");
+      fs.mkdirSync(manifestDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(manifestDir, "manifest.json"),
+        JSON.stringify(manifest, null, 2) + "\n",
+        "utf-8",
+      );
+
+      // Amend the commit to include the manifest
+      spawnSync("git", ["add", "--", ".runshift/manifest.json"], {
+        cwd: root,
+        stdio: "pipe",
+      });
+      execFileSync("git", ["commit", "--amend", "--no-edit"], { cwd: root, stdio: "pipe" });
+    } catch {
+      // Manifest write failed — non-fatal, remove will fall back to grep
+    }
+  }
+
+  // ── 12. Success ───────────────────────────────────────────────────
   showSuccess();
 }

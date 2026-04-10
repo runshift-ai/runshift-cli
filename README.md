@@ -42,9 +42,9 @@ intercept consequential actions before they run.
 
 ## Privacy
 
-- No source code sent
+The harness reads your repository structure, dependency manifest, environment variable key names, and any existing agent configuration files (CLAUDE.md, .cursor/rules/*) to generate accurate, repo-specific output. No source code files are sent. Nothing collected is stored — it is used only to generate your configuration files and discarded.
+
 - No secret values read
-- Dependency names, folder structure, env key names only
 - Every file shown before writing
 - You confirm before anything changes
 

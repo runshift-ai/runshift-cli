@@ -14,7 +14,7 @@ vi.mock("node:fs", () => ({
 
 vi.mock("node:child_process", () => ({
   spawnSync: vi.fn(() => ({ status: 0, stdout: { toString: () => "" } })),
-  execSync: vi.fn(),
+  execFileSync: vi.fn(),
 }));
 
 vi.mock("../context/git.js", () => ({

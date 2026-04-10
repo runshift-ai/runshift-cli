@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 
 export interface GitState {
   isGitRepo: boolean;
@@ -8,14 +8,14 @@ export interface GitState {
 
 export function getGitState(): GitState {
   try {
-    execSync("git rev-parse --is-inside-work-tree", { stdio: "pipe" });
+    execFileSync("git", ["rev-parse", "--is-inside-work-tree"], { stdio: "pipe" });
   } catch {
     return { isGitRepo: false, branch: "", isDirty: false };
   }
 
   let branch = "";
   try {
-    branch = execSync("git branch --show-current", { stdio: "pipe" })
+    branch = execFileSync("git", ["branch", "--show-current"], { stdio: "pipe" })
       .toString()
       .trim();
   } catch {
@@ -24,7 +24,7 @@ export function getGitState(): GitState {
 
   let isDirty = false;
   try {
-    const status = execSync("git status --porcelain", { stdio: "pipe" })
+    const status = execFileSync("git", ["status", "--porcelain"], { stdio: "pipe" })
       .toString()
       .trim();
     isDirty = status.length > 0;

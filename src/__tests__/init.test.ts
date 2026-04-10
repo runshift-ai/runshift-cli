@@ -115,7 +115,7 @@ vi.mock("../writer.js", () => ({
 // without needing to import from "node:child_process" in the test file.
 const cpMocks = vi.hoisted(() => ({
   exec: vi.fn(),
-  execSync: vi.fn(),
+  execFileSync: vi.fn(),
   spawn: vi.fn(() => ({ unref: vi.fn() })),
   // status: 0 is the only field checked in commitFiles
   spawnSync: vi.fn(() => ({ status: 0 as number | null })),
@@ -589,22 +589,22 @@ describe("init command — stream reader", () => {
   // ── Branch name validation — command injection ─────────────────────────────
 
   describe("branch name validation — command injection", () => {
-    it("rejects branch name containing semicolon before execSync is called", async () => {
+    it("rejects branch name containing semicolon before execFileSync is called", async () => {
       await expect(init(["--branch", "foo;rm -rf /"])).rejects.toThrow("process.exit(1)");
 
-      expect(cpMocks.execSync).not.toHaveBeenCalled();
+      expect(cpMocks.execFileSync).not.toHaveBeenCalled();
     });
 
-    it("rejects branch name containing backtick before execSync is called", async () => {
+    it("rejects branch name containing backtick before execFileSync is called", async () => {
       await expect(init(["--branch", "foo`id`bar"])).rejects.toThrow("process.exit(1)");
 
-      expect(cpMocks.execSync).not.toHaveBeenCalled();
+      expect(cpMocks.execFileSync).not.toHaveBeenCalled();
     });
 
     it("accepts a valid branch name and proceeds past validation", async () => {
-      // First execSync (git rev-parse) throws → branch doesn't exist → proceed
-      // Second execSync (git checkout -b) returns normally
-      cpMocks.execSync
+      // First execFileSync (git rev-parse) throws → branch doesn't exist → proceed
+      // Second execFileSync (git checkout -b) returns normally
+      cpMocks.execFileSync
         .mockImplementationOnce(() => { throw new Error("not found"); })
         .mockImplementationOnce(() => undefined as any);
 
