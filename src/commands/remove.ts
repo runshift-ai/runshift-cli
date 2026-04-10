@@ -6,7 +6,7 @@ import { confirm } from "../ui/prompt.js";
 const amber = chalk.hex("#f5a623");
 const dim = chalk.dim;
 
-const COMMIT_GREP = "install runshift agent governance rules";
+const COMMIT_GREP = "runshift agent";
 
 export async function remove(): Promise<void> {
   showBanner();
@@ -57,7 +57,7 @@ export async function remove(): Promise<void> {
 
   try {
     execSync(`git revert ${hash} --no-edit`, { stdio: "pipe" });
-    console.log(amber("\n  ✓ reverted — runshift governance rules removed\n"));
+    console.log(amber("\n  ✓ reverted — runshift coordination rules removed\n"));
   } catch (err) {
     console.log(amber("\n  revert failed."));
     console.log(dim(`  ${err instanceof Error ? err.message : err}\n`));

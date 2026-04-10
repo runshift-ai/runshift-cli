@@ -122,6 +122,7 @@ function getProtectedPaths(root: string, existingRules: Record<string, string>):
 
       const isRelay =
         lastCommitMsg.includes("install runshift agent governance rules") ||
+        lastCommitMsg.includes("install runshift agent coordination rules") ||
         lastCommitMsg.includes("runshift update");
 
       if (!isRelay) {

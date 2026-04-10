@@ -29,7 +29,7 @@ switch (command) {
   runshift — the control plane for agents, wherever they run.
 
   Usage:
-    npx runshift init [options]   Read your repo, generate governance rules
+    npx runshift init [options]   Read your repo, generate coordination rules
     npx runshift remove           Revert the runshift install commit
 
   Options:

@@ -46,12 +46,19 @@ export function promptPreview(message: string): Promise<boolean> {
   return new Promise((resolve) => {
     process.stdout.write(message);
 
+    // Non-interactive (piped stdin, CI) — skip keypress, auto-continue
+    if (!process.stdin.isTTY) {
+      console.log("\n");
+      resolve(false);
+      return;
+    }
+
     const wasRaw = process.stdin.isRaw;
     process.stdin.setRawMode(true);
     process.stdin.resume();
 
     const onData = (key: Buffer) => {
-      process.stdin.setRawMode(wasRaw ?? false);
+      if (process.stdin.isTTY) process.stdin.setRawMode(wasRaw ?? false);
       process.stdin.pause();
       process.stdin.removeListener("data", onData);
 

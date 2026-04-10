@@ -33,7 +33,7 @@ export function commitFiles(root: string, files: GeneratedFile[]): boolean {
     if (addResult.status !== 0) return false;
 
     execSync(
-      'git commit -m "chore: install runshift agent governance rules"',
+      'git commit -m "chore: install runshift agent coordination rules"',
       { cwd: root, stdio: "pipe" },
     );
 
