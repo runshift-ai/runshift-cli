@@ -1,63 +1,73 @@
 # runshift
+The control plane for AI agents.
 
-The control plane for agents, wherever they run.
+## Install coordination rules in 30 seconds
 
-## Install governance rules in 30 seconds
-
-```bash
+```
 npx runshift init
 ```
 
-relay reads your repository, identifies security gaps and agent failure patterns specific to your codebase, and installs governance rules that prevent AI agents from breaking things.
+relay scans your repo and installs coordination 
+rules so agents working in parallel don't collide.
 
 ## What it does
 
-1. **Scans your repo** — detects your stack, existing rules, migration files, environment variables (key names only)
-2. **Calls relay** — sends context to runshift.ai, generates opinionated rules specific to your codebase
-3. **Shows you everything** — findings, files to install, browser preview before anything is written
-4. **Writes on confirmation** — you approve, relay commits
+1. Scans your repo — detects your stack, existing 
+   rules, migration files, env variables (key names only)
+2. Generates rules — coordination rules specific 
+   to your codebase, not a generic template
+3. Shows everything first — findings, files, browser 
+   preview before anything is written
+4. Writes on confirmation — you approve, relay commits
 
 ## Commands
 
 | Command | Description |
-|---------|-------------|
-| `npx runshift init` | Install governance rules |
+|---|---|
+| `npx runshift init` | Install coordination rules |
 | `npx runshift init --dry-run` | Preview without writing |
 | `npx runshift init --branch <name>` | Run on a new branch |
 | `npx runshift remove` | Remove installed rules |
 
+## Running multiple agents in parallel?
+
+Claude Code, Cursor, or any AI agent working on 
+the same codebase at the same time will collide 
+without coordination. runshift.ai is the control 
+plane — scan your repo, coordinate agents, and 
+intercept consequential actions before they run.
+
+**find where your agents could collide — takes 2 minutes**
+→ runshift.ai
+
 ## Privacy
 
-- No source code is sent to runshift.ai
-- No secret values are ever read
-- Only dependency names, folder structure, and env key names are sent
-- Existing files written by humans are never overwritten
-- Every file shown before writing — you confirm before anything changes
+- No source code sent
+- No secret values read
+- Dependency names, folder structure, env key names only
+- Every file shown before writing
+- You confirm before anything changes
 
 ## Revert
 
 Everything relay installs is committed with one message:
 
-`chore: install runshift agent governance rules`
+```
+chore: install runshift coordination rules
+```
 
-To undo everything instantly:
+Undo instantly:
 
-```bash
+```
 git revert HEAD
 ```
 
-Or use the built-in remove command:
+Or remove directly:
 
-```bash
+```
 npx runshift remove
 ```
 
-## Control plane
-
-relay is the development layer of the runshift control plane.
-
-[runshift.ai](https://runshift.ai) — production governance for AI agents.
-
 ---
 
-MIT License · [github.com/devincrane/runshift-cli](https://github.com/devincrane/runshift-cli)
+MIT License · github.com/devincrane/runshift

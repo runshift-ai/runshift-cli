@@ -73,7 +73,7 @@ describe("commitFiles — git add uses spawnSync not execSync", () => {
     commitFiles(ROOT, [{ path: "foo.md", content: "x", action: "create" }]);
 
     const addViaExec = cpMocks.execSync.mock.calls.find(
-      ([cmd]: [string]) => typeof cmd === "string" && cmd.includes("git add"),
+      ([cmd]: string[]) => typeof cmd === "string" && cmd.includes("git add"),
     );
     expect(addViaExec).toBeUndefined();
   });
@@ -84,10 +84,10 @@ describe("commitFiles — git add uses spawnSync not execSync", () => {
 describe("dependency pinning — runtime deps have no ^ prefix", () => {
   it("chalk, figlet, and ora are pinned to exact versions in package.json", async () => {
     // Use a relative JSON import so we don't need @types/node for fs access
-    const pkg = (await import("../../package.json")) as {
-      dependencies: Record<string, string>;
+    const pkg = (await import("../../package.json")) as unknown as {
+      default: { dependencies: Record<string, string> };
     };
-    const { dependencies: deps } = pkg;
+    const { dependencies: deps } = pkg.default;
 
     expect(deps["chalk"]).not.toMatch(/^\^/);
     expect(deps["figlet"]).not.toMatch(/^\^/);
