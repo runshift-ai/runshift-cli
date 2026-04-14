@@ -178,14 +178,20 @@ export function showSuccess(): void {
 
 export function showDataPolicy(): void {
   console.log(amber("  relay will send to runshift.ai:\n"));
-  console.log(dim("  ✓ package.json (dependencies and scripts only)"));
+  console.log(dim("  ✓ package.json (name, description, dependencies,"));
+  console.log(dim("    devDependencies, scripts, workspaces)"));
+  console.log(dim("  ✓ tsconfig (target, module, strict, outDir only)"));
   console.log(dim("  ✓ directory structure (top 2 levels, folder names only)"));
   console.log(dim("  ✓ .env.example (key names only — values are never read)"));
   console.log(dim("  ✓ existing CLAUDE.md contents (if present)"));
   console.log(dim("  ✓ existing .cursor/rules/ contents (if present)"));
-  console.log(dim("  ✓ migration file names (no file contents)"));
+  console.log(dim("  ✓ migration file names and count (no file contents)"));
+  console.log(dim("  ✓ config file names (no file contents)"));
+  console.log(dim("  ✓ git branch name and dirty flag"));
+  console.log(dim("  ✓ protected path list"));
   console.log(dim("\n  no source code is sent."));
   console.log(dim("  no secret values are ever read."));
+  console.log(dim("  nothing is stored after your session ends."));
 }
 
 export function showDryRunComplete(): void {
